@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  shard_1:
+    image: postgres:16-alpine
+    container_name: fluffy-disco-shard-1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shard_1
+    ports:
+      - "15433:5432"
+    volumes:
+      - shard_1_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shard_1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  shard_2:
+    image: postgres:16-alpine
+    container_name: fluffy-disco-shard-2
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shard_2
+    ports:
+      - "15434:5432"
+    volumes:
+      - shard_2_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shard_2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  shard_1_data:
+  shard_2_data:
