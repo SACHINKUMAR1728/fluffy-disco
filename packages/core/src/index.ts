@@ -1,0 +1,60 @@
+import { Client } from 'pg';
+export const VERSION = '0.1.0';
+
+export class ShardCoordinator {
+  private shardConfig: ShardConfig[];
+
+  constructor(config: ShardCoordinatorOptions) {
+    this.shardConfig = config.shards;
+    console.log(`[fluffy-disco] Initialized with ${this.shardConfig.length} shards`);
+  }
+
+ 
+  //  Get the current shard configuration.
+  getShards(): ShardConfig[] {
+    return this.shardConfig;
+  }
+
+  
+  //  Test connectivity to all configured shards.   
+  async testConnection(): Promise<{ shardId: string; success: boolean; error?: string }[]> {
+    const results = await Promise.all(
+      this.shardConfig.map(async (shard) => {
+        const client = new Client({
+          host: shard.host,
+          port: shard.port,
+          user: shard.user,
+          password: shard.password,
+          database: shard.database,
+          connectionTimeoutMillis: 5000,
+        });
+
+        try {
+          await client.connect();
+          await client.query('SELECT 1');
+          await client.end();
+          return { shardId: shard.id, success: true };
+        } catch (error: any) {
+          return { shardId: shard.id, success: false, error: error.message };
+        }
+      })
+    );
+
+    return results;
+  }
+}
+
+//  Configuration for a single database shard.
+export interface ShardConfig {
+  id: string;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
+//  Options for initializing the ShardCoordinator.
+export interface ShardCoordinatorOptions {
+  shards: ShardConfig[];
+}
