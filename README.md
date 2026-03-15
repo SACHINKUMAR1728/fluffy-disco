@@ -133,24 +133,46 @@ npm test
 
 ---
 
-## 📁 Project Structure
+## ⚡ HotKeyCache — In-Memory Hot Key Layer
+
+A frequency-gated LRU cache that sits in front of the database, automatically caching only the keys that are frequently accessed ("hot keys").
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Frequency-gated promotion** | A key is only cached after it exceeds a hit `threshold` within a sliding window — cold keys never pollute the cache |
+| **Thundering herd prevention** | Concurrent requests for the same uncached key share a single in-flight Promise — the DB is called exactly once |
+| **Adaptive TTL** | Hot keys automatically get extended TTL (`×2` or `×3`) based on their hit ratio |
+| **Prefix thresholds** | Per-key-family thresholds, e.g. `{ 'shard:': 10, 'user:': 20 }` — longest prefix wins |
+| **Memory cap** | Hard memory ceiling via `lru-cache` `sizeCalculation` — entries are evicted when the cap is reached |
+| **Full event bus** | `cache:hit`, `cache:miss`, `cache:promoted`, `cache:invalidated`, `cache:evicted` |
+| **Interactive simulator** | Visual demo at `packages/core/src/lib/hotKeyCache.simulator.html` — open directly in any browser |
+
+### New Files
 
 ```
-fluffy-disco/
-├── packages/                    # Monorepo packages
-│   └── core/                    # Core coordination library
-│       ├── src/                 # Library source code
-│       │   └── index.ts         # Main library entry point
-│       ├── test/                # Test files
-│       │   └── connection.test.ts  # Connection tests
-│       ├── package.json         # Package dependencies & scripts
-│       └── jest.config.js       # Jest test configuration
-├── docker-compose.yml           # PostgreSQL shard containers
-├── package.json                 # Root workspace configuration
-└── README.md                    # This file
+packages/core/
+├── src/
+│   └── lib/
+│       ├── hotKeyCache.ts              # Library (FrequencyCounter + HotKeyCache + singleton)
+│       └── hotKeyCache.simulator.html  # Zero-dependency visual simulator
+└── test/
+    └── hotKeyCache.test.ts             # 30 Jest tests
 ```
 
-**Key Directories:**
-- **`packages/core/src/`**: Contains the actual library code for the shard coordination layer
-- **`packages/core/test/`**: Contains all test files (using Jest framework)
-- **`docker-compose.yml`**: Defines the PostgreSQL shard containers configuration
+### Run Tests
+
+```bash
+# All tests (requires Docker running for connection.test.ts)
+npm test
+
+# HotKeyCache tests only (no Docker needed)
+cd packages/core
+npx jest --testPathPattern=hotKeyCache --verbose
+
+# TypeScript type check
+cd packages/core
+npx tsc --noEmit
+```
+

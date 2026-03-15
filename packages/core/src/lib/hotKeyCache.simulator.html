@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotKeyCache Simulator</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --gray: #374151;
+    --card: #252836;
+    --radius: 10px;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --card: #f8fafc;
+      --gray: #94a3b8;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  header .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .panel {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  .panel:last-child { border-right: none; }
+
+  .panel-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* ── Controls ──────────────────────────────────────────────────────────── */
+  .control-group {
+    margin-bottom: 20px;
+  }
+
+  .control-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .control-label span {
+    color: var(--accent);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+    height: 4px;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 20px;
+  }
+
+  .toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    cursor: pointer;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--gray);
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+
+  .toggle-thumb {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: left 0.2s;
+  }
+
+  .toggle input:checked ~ .toggle-thumb { left: 21px; }
+
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 9px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: var(--font);
+  }
+
+  .btn:hover { background: var(--border); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { opacity: 0.9; }
+
+  /* ── Key Bars ──────────────────────────────────────────────────────────── */
+  .key-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .key-row { display: flex; flex-direction: column; gap: 4px; }
+
+  .key-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .key-name { color: var(--text); font-family: monospace; }
+
+  .key-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .key-hits { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .key-tag {
+    font-size: 0.62rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .tag-cold    { background: rgba(55,65,81,0.4);  color: var(--muted); }
+  .tag-warming { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .tag-cached  { background: rgba(34,197,94,0.15);  color: var(--green); }
+  .tag-promoting { background: rgba(99,102,241,0.15); color: var(--accent); }
+
+  .bar-track {
+    height: 8px;
+    background: var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.25s ease, background 0.25s ease;
+    position: relative;
+  }
+
+  .bar-ttl {
+    position: absolute;
+    top: 0; right: 0;
+    height: 100%;
+    background: rgba(0,0,0,0.25);
+    border-radius: 0 999px 999px 0;
+    transition: width 0.25s linear;
+  }
+
+  .bar-flash {
+    animation: flash 0.4s ease;
+  }
+
+  @keyframes flash {
+    0%   { filter: brightness(2); }
+    100% { filter: brightness(1); }
+  }
+
+  /* ── Right panel ───────────────────────────────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+
+  .stat-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.red   { color: var(--red); }
+  .stat-value.accent { color: var(--accent); }
+
+  .chart-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--card);
+  }
+
+  .chart-header {
+    padding: 10px 14px 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    display: flex;
+    gap: 16px;
+  }
+
+  .legend-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+
+  canvas#chart {
+    display: block;
+    width: 100%;
+    height: 180px;
+  }
+
+  /* ── Scrollbars ─────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ HotKeyCache Simulator</h1>
+  <span class="badge">Live</span>
+</header>
+
+<div class="layout">
+
+  <!-- ── LEFT: Controls ──────────────────────────────────────────────────── -->
+  <div class="panel" id="ctrl-panel">
+    <div class="panel-title">Simulation Controls</div>
+
+    <div class="control-group">
+      <div class="control-label">Hotness Threshold <span id="val-threshold">50</span></div>
+      <input type="range" id="sl-threshold" min="5" max="200" value="50" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">TTL (seconds) <span id="val-ttl">5</span></div>
+      <input type="range" id="sl-ttl" min="1" max="30" value="5" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Requests / sec <span id="val-rps">80</span></div>
+      <input type="range" id="sl-rps" min="10" max="500" value="80" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Active Keys <span id="val-keys">10</span></div>
+      <input type="range" id="sl-keys" min="3" max="20" value="10" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Skew (power law) <span id="val-skew">2.0</span></div>
+      <input type="range" id="sl-skew" min="10" max="40" value="20" step="1" />
+    </div>
+
+    <div class="toggle-row">
+      Adaptive TTL
+      <label class="toggle">
+        <input type="checkbox" id="cb-adaptive" checked />
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+
+    <button class="btn" id="btn-reset">↺ Reset Stats</button>
+    <button class="btn primary" id="btn-pause">⏸ Pause</button>
+  </div>
+
+  <!-- ── MIDDLE: Key Activity ─────────────────────────────────────────────── -->
+  <div class="panel" id="key-panel">
+    <div class="panel-title">Live Key Activity</div>
+    <div class="key-list" id="key-list"></div>
+  </div>
+
+  <!-- ── RIGHT: Metrics ──────────────────────────────────────────────────── -->
+  <div class="panel" id="metrics-panel">
+    <div class="panel-title">Live Metrics</div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Requests/s</div>
+        <div class="stat-value accent" id="m-rps">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Hit Rate</div>
+        <div class="stat-value green" id="m-hitrate">0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">DB Calls/s</div>
+        <div class="stat-value red" id="m-dbcalls">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">DB Saved/s</div>
+        <div class="stat-value green" id="m-saved">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cached Keys</div>
+        <div class="stat-value amber" id="m-cached">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Est. Memory</div>
+        <div class="stat-value" id="m-mem">0 KB</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-header">
+        <span><span class="legend-dot" style="background:var(--green)"></span>Hit Rate %</span>
+        <span><span class="legend-dot" style="background:var(--red)"></span>DB Call Rate</span>
+      </div>
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===========================================================================
+//  FrequencyCounter (mirrors real implementation)
+// ===========================================================================
+class FrequencyCounter {
+  constructor({ windowMs = 60000 } = {}) {
+    this.windowMs = windowMs;
+    this.windows = new Map();
+  }
+  increment(key) {
+    const now = Date.now();
+    const e = this.windows.get(key);
+    if (!e || now - e.windowStart >= this.windowMs) {
+      this.windows.set(key, { count: 1, windowStart: now });
+      return 1;
+    }
+    e.count++;
+    return e.count;
+  }
+  get(key) {
+    const e = this.windows.get(key);
+    if (!e) return 0;
+    if (Date.now() - e.windowStart >= this.windowMs) { this.windows.delete(key); return 0; }
+    return e.count;
+  }
+}
+
+// ===========================================================================
+//  LRU simulation
+// ===========================================================================
+class LRUSim {
+  constructor(max = 500) {
+    this.max = max;
+    this.map = new Map(); // key → { value, promotedAt, ttl }
+  }
+  has(key) {
+    const e = this.map.get(key);
+    if (!e) return false;
+    if (Date.now() - e.promotedAt >= e.ttl) { this.map.delete(key); return false; }
+    return true;
+  }
+  get(key) {
+    if (!this.has(key)) return undefined;
+    // Move to end (LRU refresh)
+    const e = this.map.get(key);
+    this.map.delete(key);
+    this.map.set(key, e);
+    return e.value;
+  }
+  set(key, value, ttl) {
+    if (this.map.size >= this.max) {
+      // Evict oldest
+      const oldest = this.map.keys().next().value;
+      this.map.delete(oldest);
+    }
+    this.map.delete(key); // remove before re-set to refresh position
+    this.map.set(key, { value, promotedAt: Date.now(), ttl });
+  }
+  delete(key) { this.map.delete(key); }
+  get size() {
+    // Purge expired
+    const now = Date.now();
+    for (const [k, e] of this.map) {
+      if (now - e.promotedAt >= e.ttl) this.map.delete(k);
+    }
+    return this.map.size;
+  }
+  ttlRemaining(key) {
+    const e = this.map.get(key);
+    if (!e) return 0;
+    return Math.max(0, e.ttl - (Date.now() - e.promotedAt));
+  }
+  keys() { return this.map.keys(); }
+}
+
+// ===========================================================================
+//  Simulation state
+// ===========================================================================
+let cfg = {
+  threshold: 50,
+  ttlMs: 5000,
+  rps: 80,
+  numKeys: 10,
+  skew: 2.0,
+  adaptiveTtl: true,
+};
+
+let paused = false;
+
+// Per-key state
+let keyStates = [];  // { name, hits, cached, promoting, flash }
+
+// Rolling stats (last second)
+let stats = { totalReqs: 0, cacheHits: 0, dbCalls: 0 };
+let prevStats = { ...stats };
+let interval = null;
+
+// Sliding window sim objects
+let counter = new FrequencyCounter({ windowMs: 60000 });
+let lru = new LRUSim(500);
+
+// Chart history — 30 data points (one per second)
+const CHART_POINTS = 30;
+let hitRateHistory  = Array(CHART_POINTS).fill(0);
+let dbRateHistory   = Array(CHART_POINTS).fill(0);
+let chartTimer = null;
+
+// ===========================================================================
+//  Power-law key selection
+// ===========================================================================
+function buildWeights(n, exp) {
+  const w = Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1, exp));
+  const total = w.reduce((a, b) => a + b, 0);
+  return w.map(x => x / total); // normalize
+}
+
+function weightedPick(weights) {
+  let r = Math.random();
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return i;
+  }
+  return weights.length - 1;
+}
+
+// ===========================================================================
+//  Adaptive TTL
+// ===========================================================================
+function computeTtl(hits, threshold, baseTtl, adaptive) {
+  if (!adaptive) return baseTtl;
+  const ratio = hits / threshold;
+  if (ratio > 10) return baseTtl * 3;
+  if (ratio > 5)  return baseTtl * 2;
+  return baseTtl;
+}
+
+// ===========================================================================
+//  Init / reset
+// ===========================================================================
+function rebuildKeys() {
+  keyStates = Array.from({ length: cfg.numKeys }, (_, i) => ({
+    name: `key:${i + 1}`,
+    hits: 0,
+    cached: false,
+    promoting: false,
+    flash: false,
+  }));
+  counter = new FrequencyCounter({ windowMs: 60000 });
+  lru = new LRUSim(500);
+  stats = { totalReqs: 0, cacheHits: 0, dbCalls: 0 };
+  prevStats = { ...stats };
+  renderKeys();
+}
+
+function resetStats() {
+  stats = { totalReqs: 0, cacheHits: 0, dbCalls: 0 };
+  prevStats = { ...stats };
+  hitRateHistory  = Array(CHART_POINTS).fill(0);
+  dbRateHistory   = Array(CHART_POINTS).fill(0);
+}
+
+// ===========================================================================
+//  Simulation tick
+// ===========================================================================
+function tick(requestsThisTick) {
+  const weights = buildWeights(cfg.numKeys, cfg.skew);
+
+  for (let r = 0; r < requestsThisTick; r++) {
+    const idx = weightedPick(weights);
+    const ks = keyStates[idx];
+    const key = ks.name;
+
+    stats.totalReqs++;
+    const hits = counter.increment(key);
+    ks.hits = hits;
+
+    if (lru.has(key)) {
+      // Cache hit
+      stats.cacheHits++;
+      ks.cached = true;
+      ks.promoting = false;
+    } else {
+      // Cache miss → DB call
+      stats.dbCalls++;
+      const thresh = cfg.threshold;
+      if (hits >= thresh) {
+        // Promote
+        const ttl = computeTtl(hits, thresh, cfg.ttlMs, cfg.adaptiveTtl);
+        lru.set(key, true, ttl);
+        ks.cached = true;
+        ks.promoting = false;
+        // Flash
+        ks.flash = true;
+        setTimeout(() => { ks.flash = false; }, 400);
+      } else {
+        const warmPct = hits / thresh;
+        ks.promoting = warmPct >= 0.5;
+        ks.cached = false;
+      }
+    }
+  }
+}
+
+// ===========================================================================
+//  Render
+// ===========================================================================
+function renderKeys() {
+  const container = document.getElementById('key-list');
+  const threshold = cfg.threshold;
+
+  // Ensure DOM rows exist
+  while (container.children.length < keyStates.length) {
+    const row = document.createElement('div');
+    row.className = 'key-row';
+    row.innerHTML = `
+      <div class="key-header">
+        <span class="key-name"></span>
+        <div class="key-meta">
+          <span class="key-hits"></span>
+          <span class="key-tag"></span>
+        </div>
+      </div>
+      <div class="bar-track"><div class="bar-fill"><div class="bar-ttl"></div></div></div>
+    `;
+    container.appendChild(row);
+  }
+  while (container.children.length > keyStates.length) {
+    container.removeChild(container.lastChild);
+  }
+
+  keyStates.forEach((ks, i) => {
+    const row = container.children[i];
+    const nameEl  = row.querySelector('.key-name');
+    const hitsEl  = row.querySelector('.key-hits');
+    const tagEl   = row.querySelector('.key-tag');
+    const fill    = row.querySelector('.bar-fill');
+    const ttlBar  = row.querySelector('.bar-ttl');
+
+    nameEl.textContent = ks.name;
+    hitsEl.textContent = ks.hits + ' hits';
+
+    let tag, fillColor, fillPct;
+
+    if (ks.cached) {
+      // Green with TTL countdown
+      const rem = lru.ttlRemaining(ks.name);
+      const pct = rem / cfg.ttlMs;
+      tag = 'cached';
+      fillColor = 'var(--green)';
+      fillPct = 90;
+      // TTL depletion overlay
+      ttlBar.style.width = ((1 - pct) * 100) + '%';
+      tagEl.className = 'key-tag tag-cached';
+    } else if (ks.promoting) {
+      // Amber warming
+      const warmPct = Math.min(ks.hits / threshold, 1);
+      tag = 'warming';
+      fillColor = 'var(--amber)';
+      fillPct = warmPct * 75;
+      ttlBar.style.width = '0%';
+      tagEl.className = 'key-tag tag-warming';
+    } else if (ks.hits > 0) {
+      // Gray cold
+      const pct = Math.min(ks.hits / threshold, 0.5);
+      tag = 'cold';
+      fillColor = 'var(--gray)';
+      fillPct = pct * 60;
+      ttlBar.style.width = '0%';
+      tagEl.className = 'key-tag tag-cold';
+    } else {
+      tag = 'cold';
+      fillColor = 'var(--gray)';
+      fillPct = 2;
+      ttlBar.style.width = '0%';
+      tagEl.className = 'key-tag tag-cold';
+    }
+
+    tagEl.textContent = tag;
+    fill.style.width = fillPct + '%';
+    fill.style.background = fillColor;
+
+    if (ks.flash) {
+      fill.classList.remove('bar-flash');
+      void fill.offsetWidth; // reflow
+      fill.classList.add('bar-flash');
+    }
+  });
+}
+
+function renderStats(elapsed) {
+  const delta = elapsed / 1000;
+  const reqsSec  = Math.round((stats.totalReqs - prevStats.totalReqs) / delta);
+  const hitsSec  = stats.cacheHits - prevStats.cacheHits;
+  const dbSec    = Math.round((stats.dbCalls   - prevStats.dbCalls)   / delta);
+  const savedSec = Math.round((hitsSec) / delta);
+  const hitRate  = stats.totalReqs > 0
+    ? ((stats.cacheHits / stats.totalReqs) * 100).toFixed(1)
+    : '0.0';
+  const cachedCount = lru.size;
+
+  // Estimate memory: ~100 bytes per cached key (rough)
+  const memKb = Math.round(cachedCount * 100 / 1024);
+
+  document.getElementById('m-rps').textContent    = reqsSec;
+  document.getElementById('m-hitrate').textContent = hitRate + '%';
+  document.getElementById('m-dbcalls').textContent = dbSec;
+  document.getElementById('m-saved').textContent   = savedSec;
+  document.getElementById('m-cached').textContent  = cachedCount;
+  document.getElementById('m-mem').textContent     = memKb + ' KB';
+
+  prevStats = { ...stats };
+}
+
+// ===========================================================================
+//  Canvas Chart
+// ===========================================================================
+function drawChart() {
+  const canvas = document.getElementById('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0) return;
+
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W = rect.width;
+  const H = rect.height;
+  const pad = { top: 10, right: 12, bottom: 24, left: 36 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  // Background
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches ||
+                 document.body.style.background !== '';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#252836';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(128,128,128,0.15)';
+  ctx.lineWidth = 1;
+  for (let t = 0; t <= 4; t++) {
+    const y = pad.top + (plotH / 4) * t;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + plotW, y);
+    ctx.stroke();
+
+    // Y labels
+    const label = (100 - t * 25) + '';
+    ctx.fillStyle = 'rgba(136,146,164,0.7)';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText(label, pad.left - 4, y + 3);
+  }
+
+  // X labels
+  ctx.fillStyle = 'rgba(136,146,164,0.6)';
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('30s ago', pad.left, H - 6);
+  ctx.fillText('now',     pad.left + plotW, H - 6);
+
+  function drawLine(data, color, maxVal = 100) {
+    if (data.length < 2) return;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+    data.forEach((v, i) => {
+      const x = pad.left + (i / (data.length - 1)) * plotW;
+      const y = pad.top + plotH - (Math.min(v, maxVal) / maxVal) * plotH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Fill under line
+    const lastX = pad.left + plotW;
+    const firstX = pad.left;
+    const firstY = pad.top + plotH - (Math.min(data[0], maxVal) / maxVal) * plotH;
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+    grad.addColorStop(0, color.replace(')', ',0.25)').replace('var(', 'rgba(0,0,0,'));
+    grad.addColorStop(1, 'transparent');
+    // Simpler: use rgba directly
+    ctx.lineTo(lastX, pad.top + plotH);
+    ctx.lineTo(firstX, pad.top + plotH);
+    ctx.closePath();
+    ctx.fillStyle = color === '#22c55e' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+    ctx.fill();
+  }
+
+  // Max DB rate for scaling
+  const maxDb = Math.max(...dbRateHistory, cfg.rps, 10);
+
+  drawLine(hitRateHistory, '#22c55e', 100);
+  drawLine(dbRateHistory.map(v => (v / maxDb) * 100), '#ef4444', 100);
+}
+
+// ===========================================================================
+//  Main loop
+// ===========================================================================
+let lastTick = Date.now();
+let tickAccum = 0;
+
+function startLoop() {
+  if (interval) clearInterval(interval);
+  // Tick at 100ms intervals; distribute requests
+  interval = setInterval(() => {
+    if (paused) return;
+    const now = Date.now();
+    const dt = now - lastTick;
+    lastTick = now;
+    tickAccum += dt;
+
+    const requestsPerMs = cfg.rps / 1000;
+    const requestsThisTick = Math.round(requestsPerMs * dt);
+    if (requestsThisTick > 0) tick(requestsThisTick);
+
+    renderKeys();
+
+    if (tickAccum >= 250) {
+      renderStats(tickAccum);
+      tickAccum = 0;
+    }
+  }, 50);
+
+  // Chart updates every second
+  if (chartTimer) clearInterval(chartTimer);
+  chartTimer = setInterval(() => {
+    if (paused) return;
+    const total = stats.totalReqs;
+    const hitRate = total > 0 ? (stats.cacheHits / total) * 100 : 0;
+    const dbRate  = Math.round((stats.dbCalls) / ((Date.now() - (Date.now() - 1000)) / 1000 + 1));
+
+    // Calculate per-second DB calls
+    const dbPerSec = cfg.rps - Math.round((stats.cacheHits / Math.max(stats.totalReqs, 1)) * cfg.rps);
+
+    hitRateHistory.push(Math.round(hitRate * 10) / 10);
+    dbRateHistory.push(dbPerSec);
+    if (hitRateHistory.length > CHART_POINTS) hitRateHistory.shift();
+    if (dbRateHistory.length  > CHART_POINTS) dbRateHistory.shift();
+
+    drawChart();
+  }, 1000);
+}
+
+// ===========================================================================
+//  Controls wiring
+// ===========================================================================
+function bindSlider(id, key, displayId, transform) {
+  const el = document.getElementById(id);
+  const disp = document.getElementById(displayId);
+  el.addEventListener('input', () => {
+    const val = transform ? transform(+el.value) : +el.value;
+    cfg[key] = val;
+    disp.textContent = typeof val === 'number' && !Number.isInteger(val)
+      ? val.toFixed(1)
+      : val;
+    if (key === 'numKeys') rebuildKeys();
+  });
+}
+
+bindSlider('sl-threshold', 'threshold', 'val-threshold', null);
+bindSlider('sl-ttl',       'ttlMs',     'val-ttl',       v => v * 1000);
+bindSlider('sl-rps',       'rps',       'val-rps',       null);
+bindSlider('sl-keys',      'numKeys',   'val-keys',      null);
+bindSlider('sl-skew',      'skew',      'val-skew',      v => v / 10);
+
+// Fix TTL display to show seconds
+document.getElementById('sl-ttl').addEventListener('input', function() {
+  document.getElementById('val-ttl').textContent = this.value;
+});
+
+document.getElementById('cb-adaptive').addEventListener('change', function() {
+  cfg.adaptiveTtl = this.checked;
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  lru = new LRUSim(500);
+  counter = new FrequencyCounter({ windowMs: 60000 });
+  keyStates.forEach(k => { k.hits = 0; k.cached = false; k.promoting = false; });
+  resetStats();
+  renderKeys();
+});
+
+document.getElementById('btn-pause').addEventListener('click', function() {
+  paused = !paused;
+  this.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  this.className   = paused ? 'btn'      : 'btn primary';
+  lastTick = Date.now();
+});
+
+// ===========================================================================
+//  Boot
+// ===========================================================================
+rebuildKeys();
+startLoop();
+
+// Resize chart on window resize
+window.addEventListener('resize', drawChart);
+</script>
+</body>
+</html>

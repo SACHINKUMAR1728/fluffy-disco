@@ -15,11 +15,14 @@
     "docker:logs": "docker-compose logs -f"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
+    "nodemon": "^3.0.3",
     "ts-node": "^10.9.2",
-    "nodemon": "^3.0.3"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "lru-cache": "^10.4.3"
   }
 }
